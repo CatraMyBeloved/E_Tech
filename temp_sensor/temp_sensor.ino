@@ -8,12 +8,15 @@ OneWire oneWire(ONE_WIRE_BUS);
 
 DallasTemperature sensors(&oneWire);
 
-float getTemp(int num_sensors);
+float getTemp();
 float result = 0;
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
   sensors.begin();
+  Serial.println("Hihihihi");
+  
+
 }
 
 void loop() {

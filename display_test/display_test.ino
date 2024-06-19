@@ -1,6 +1,4 @@
-#include "Adafruit_GFX.h"
-#include <Adafruit_SSD1306.h>
-#include <Wire.h>
+
 
 Adafruit_SSD1306 display(128,32,&Wire,-1);
 
