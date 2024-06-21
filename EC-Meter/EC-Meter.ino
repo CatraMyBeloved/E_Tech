@@ -38,3 +38,26 @@ void loop() {
   delay(10000);
 
 }
+
+float get_EC(EC_POWER, EC_READ){
+  float V_Water;
+  float R_Water;
+  float EC;
+  float PPM;
+  float K = 2.0;
+  digitalWrite(EC_POWER, HIGH);
+
+  delay(10);
+
+  V_Water = analogRead(EC_READ);
+
+  delay(10);
+
+  digitalWrite(EC_Power, LOW);
+
+  V_Water = V_Water * 5.0 /1024;
+  R_Water = (1000*V_Water)/(5.0 - V_Water);
+  EC = 1000/R_Water*K;
+  PPM = EC*700;
+  return PPM;
+}
