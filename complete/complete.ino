@@ -1,7 +1,8 @@
 //include all necessary libraries: 
 
-//TODO: calibrate K value for EC-meter, time-controlled features
-
+//TODO: calibrate K value for EC-meter
+//TODO: clean up get_PPM, create initialize_pin function, optimize get_PH, prevent infinite loops for adjust functions
+#include <RTC.h>
 //Water_temp
 #include <DallasTemperature.h>
 #include <OneWire.h>
@@ -22,8 +23,9 @@
 #define ph_meter A3
 #define EC_Read A2
 //digital
+#define lights 8
 #define EC_Power 7
-#define air_temp_pin 3
+#define air_temp_pin 6
 #define water_temp_pin 2
 //pumps
 #define pump_1 3
@@ -35,8 +37,7 @@
 
 //initialize pins
 //settings
-int samples = 10;
-int time_1 = 10000;
+int distance = 30000;
 //decide on minimum and maximum values
 float ph_max = 6.7;
 float ph_min = 6.0;
@@ -76,6 +77,11 @@ void adjust_PUMP();
 
 void setup() {
   Serial.begin(9600);
+  
+  RTC.begin();
+  RTCTime startTime(1, Month::JANUARY, 2023, 0, 0, 0, DayOfWeek::MONDAY, SaveLight::SAVING_TIME_INACTIVE);
+  RTC.setTime(startTime);
+
   sensors.begin();
   am2302.begin();
   ina219.begin();
@@ -96,35 +102,41 @@ void setup() {
   digitalWrite(pump_2, LOW);
   pinMode(pump_3, OUTPUT);
   digitalWrite(pump_3, LOW);
+  pinMode(lights, OUTPUT);
+  digitalWrite(lights, LOW);
 
 
   delay(2000);
-  Serial.println("Sensors initialized. Beginning loop. Current settings: averaging ");
-  Serial.print(samples);
-  Serial.print(" samples over ");
-  Serial.print(time_1 / 1000);
-  Serial.println(" seconds.");
+  Serial.print("Sensors initialized. Beginning loop. Current settings: measurements taken every ");
+  Serial.print(distance/1000);
+  Serial.println(" Seconds");
   display.display();
 }
 
 void loop() {
   Serial.print("Measurement starting.");
+  //control lights through time
+  RTCTime currentTime;
+  RTC.getTime(currentTime);
 
+  int currentHour = currentTime.getHour();
+
+  if((currentHour < 8 )||(currentHour > 20)){
+    digitalWrite(lights, LOW);
+  }
+  else{
+    digitalWrite(lights, HIGH);
+  }
   //Declare measured variables
   water_level = 0;
   ph = 0;
   temp_water = 0;
   temp_air = 0;
 
-  //Measure water temperature over certain amount of time and average
-  for(int i = 0; i < samples; i++){
-    sensors.requestTemperatures();
-    temp_water += sensors.getTempCByIndex(0);
-    delay(time_1/samples);
-    Serial.print(".");
-  }
-  temp_water = temp_water/samples;
-
+  //Measure water temperature
+  sensors.requestTemperatures();
+  temp_water = sensors.getTempCByIndex(0);
+    
   //Measure PH, since measurement is influenced by wall power, measure over one T (20ms)
   ph = get_PH(ph_meter);
   
@@ -142,7 +154,7 @@ void loop() {
   if(ppm < ppm_min){
     adjust_PPM();
   }
-  delay(10000);
+  delay(distance);
 
 }
 
