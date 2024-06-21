@@ -1,6 +1,6 @@
 // Include all necessary libraries
 
-// TODO: calibrate K value for EC-meter
+// TODO: calibrate K value for EC-meter, eror / faulty readings handling
 #include <RTC.h> // Real Time Clock library
 #include <DallasTemperature.h> // Library for water temperature sensor
 #include <OneWire.h> // Library for one-wire communication
