@@ -1,6 +1,6 @@
 // Include all necessary libraries
 
-// TODO: calibrate K value for EC-meter, error handling, style
+// TODO: calibrate K value for EC-meter, error handling
 #include <RTC.h> // Real Time Clock library
 #include <DallasTemperature.h> // Library for water temperature sensor
 #include <OneWire.h> // Library for one-wire communication
@@ -9,6 +9,7 @@
 #include <Adafruit_SSD1306.h> // Library for OLED display
 #include <Adafruit_GFX.h> // Graphics library for OLED display
 
+#define NUMBER_SENSORS 5
 // Define pins
 // Analog pins
 #define PIN_WATER_LVL_1 A0
@@ -65,6 +66,8 @@ Adafruit_SSD1306 display(128, 32, &Wire, -1);
 // Declare variables for sensor readings
 int water_level = 0;
 int light_state = 0;
+int ph_ok = 0; 
+int ppm_ok = 0;
 float ph = 0.0;
 float temp_water = 0.0;
 float temp_air = 0.0;
@@ -74,13 +77,31 @@ float ppm = 0.0;
 // Function declarations
 float get_PPM();
 float get_PH();
+void validate(float measured_values[]);
 void adjust_PH();
 void adjust_PPM();
 void initialize_pin(int pin);
 void initialize_input_pin(int pin);
 void update_display();
 void control_lights(int currentHour);
+//validation of measured values
+float valid_values[NUMBER_SENSORS][2] = {
+  {0, 40},//air temperature
+  {0, 100}, //water temperature
+  {0, 14}, //ph 
+  {0, 3000} //ec
+}; 
+float measured_values[NUMBER_SENSORS] = {};
+int validated[NUMBER_SENSORS] = {};
 
+const char *sensor_names[] = {
+  "air temperature",
+  "water temperature",
+  "ph value",
+  "PPM value"
+};
+
+int error_found = 0;
 void setup() {
   Serial.begin(9600); // Initialize serial communication
   
@@ -119,6 +140,7 @@ void setup() {
 }
 
 void loop() {
+  error_found = 0;
   Serial.print("Measurement starting.");
   
   // Use real-time clock to control PIN_LIGHTS, get current time
@@ -134,17 +156,44 @@ void loop() {
   // Measure water temperature
   sensors.requestTemperatures();
   temp_water = sensors.getTempCByIndex(0);
-
+  measured_values[1] = temp_water;
   // Measure pH value
   ph = get_PH();
-
+  // set ph_ok flag to 0 if ph is too low (high ph is handled by adjustment functions)
+  if(ph < 6.0){
+    ph_ok = 0;
+  }
+  else{
+    ph_ok = 1;
+  }
+  measured_values[2] = ph;
   // Measure air temperature and humidity
   temp_air = am2302.get_Temperature();
   hum_air = am2302.get_Humidity();
-
+  measured_values[0] = temp_air;
   // Measure EC and PPM
   ppm = get_PPM();
-
+  measured_values[3] = ppm;
+  
+  //validate measured values
+  display.clearDisplay();
+  display.display();
+  validate(measured_values);
+  for(int i = 0; i < NUMBER_SENSORS; i++){
+    if(!validated[i]){
+      display.print("Invalid value for ");
+      display.println(sensor_names[i]);
+      error_found = 1;
+    }
+  }
+  if(error_found == 0){
+  //set ppm_ to 0 if ppm is too high (low ppm is handled by adjustment functions)
+  if(ppm > 1100){
+    ppm_ok = 0;
+  }
+  else{
+    ppm_ok = 1;
+  }
   // Check if pH needs adjustment
   if (ph > PH_MAX) {
     adjust_PH();
@@ -157,7 +206,7 @@ void loop() {
 
   // Update the display with current sensor values
   update_display();
-
+  }
   delay(MEASUREMENT_INTERVAL); // Wait for the next measurement cycle
 }
 
@@ -179,7 +228,15 @@ void update_display() {
   display.println(ph);
   display.print("Humidity: ");
   display.println(hum_air);
-  display.display(); // Update the display with new data
+  if(ph_ok == 0 || ppm_ok == 0){
+    display.clearDisplay();
+  }
+  if(ph_ok == 0){
+    display.println("PH not in recommended range, adjustment needed.");
+  }
+  if(ppm_ok == 0){
+    display.println("PPM not in recommended range, adjustment needed.");
+  }  display.display(); // Update the display with new data
 }
 
 float get_PPM() {
@@ -273,3 +330,13 @@ void initialize_pin(int pin) {
 void initialize_input_pin(int pin) {
   pinMode(pin, INPUT); // Set pin as input
 }
+
+void validate(float measured_values[]){
+  for(int i = 0; i < NUMBER_SENSORS; i++){
+    if(measured_values[i] >= valid_values[i][0] && measured_values[i] <= valid_values[i][1]){
+      validated[i] = 1;
+    }
+  }
+  
+}
+
