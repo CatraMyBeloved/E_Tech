@@ -1,0 +1,49 @@
+\documentclass{report}
+\usepackage{graphicx} % Required for inserting images
+
+\title{E-Technik Bericht}
+\author{Ole Stein, Glen, Daniel Holle }
+\date{June 2024}
+
+\begin{document}
+
+\maketitle
+
+\chapter{Aufbau}
+
+\section{Übersicht}
+Dieser Bericht beschreibt unser diesjähriges E-Technik Praxisprojekt. Hierbei handelt es sich um die Steuerung eines Hydroponik-Systems unter Verwendung eines Arduino-Microcontrollers. 
+
+\section{Grundlagen eines Hydroponik-Systems}
+Eine sogennante Hydrokultur, oder Hydroponic System, ist eine Art des Pflanzenanbaus. Hierbei wird anstatt von Erde ein inertes Wachstumsmedium und eine Nährstofflösung genutzt. Durch genaue Kontrolle verschiedener Faktoren lässt sich eine ideale Umgebung für schnelles Wachstum erschaffen.
+\subsection{Nutrient Film Technique}
+Unser Projekt verwendet die Nutrient Film Technique, kurz NFT. Diese nutzt einen dünnen, kontinuierlich fließenden Film aus Nährstofflösung, der am Boden eines Rohres verläuft, um die Wurzeln der Pflanzen mit Nährstoffen zu versorgen. Diese befinden sich in mit einem Wachstumsmedium (z.B. Tonkügelchen) gefüllten Korb in der Decke des Rohres. Durch den simplen Aufbau ist dieses System bestens für die Verwendung zuhause geeignet. 
+
+\section{Sensorik}
+Relevant für eine gute Wachstumsumgebung sind folgende Werte:
+\begin{itemize}
+    \item Umgebungstemperatur
+    \item Luftfeuchtigkeit
+    \item Wassertemperatur
+    \item PH-Wert des Wassers
+    \item PPM-Wert des Wassers(um die Menge der Nährstoffe zu bestimmen)
+\end{itemize}
+Um diese Werte zu bestimmen, wird eine Sammlung von Sensoren genutzt. 
+\subsection{Umgebungstemperatur und Luftfeuchtigkeit}
+Umgebungstemperatur und Luftfeuchtigkeit werden von einem weit verbreiteten DHT-22/AM2302 Sensor gemessen. Bei diesem handelt es sich um einen digitalen Temperatur- und Luftfeuchtigkeitssensor der eine einzelne Serielle Schnittstelle hat.
+\subsection{Wassertemperatur}
+Die Wassertemperatur wird mit einem DS18B20 Temperatursensor gemessen. Auch dieser ist ein digitaler Sensor, und verfügt über einen "One-Wire-Bus", der es ermöglicht mehrere dieser Sensoren an den selben Datenpin anzuschließen.
+\subsection{PH-Wert}
+Um den PH-Wert zu bestimmen, wird ein analoges PH-Messgerät mit einer Glaselektrode genutzt. Eine an dieser stattfindende Halbzellenreaktion erzeugt eine Potentialdifferenz zu einer in einer Referenzlösung aufbewahrten Elektrode. Diese kann gemessen werden, und hängt größtenteils linear mit dem PH-Wert zusammen.
+\subsection{PPM-Wert}
+Die im Wasser gelösten Teilchen lassen sich über den Leitwert des Wassers bestimmen. Um diesen zu berechnen wird ein selbstgebautes EC-Messgerät genutzt. An einer späteren Stelle in diesem Bericht wird die Funktionsweise genauer erläutert.
+\subsection{Andere Sensoren}
+Abschließend werden mehrere Feuchtigkeitssensoren genutzt, um die Füllstände der verschiedenen Behälter zu bestimmen. Hierbei kommen Sensoren verschiedener Bauweise zum Einsatz. 
+\subsubsection{Bauweise A}
+Diese Bauweise nutzt einfach nebeneinandergelegene Leiter mit sehr geringem Abstand. An einen dieser Leiter wird eine Spannung angelegt, welche gemessen wird. Der andere wird mit dem Erdleiter verbunden. Im trockenen Zustand genügt der Abstand zwischen den Bahnen um diese zu isolieren. Kommt nun Wasser in Kontakt mit beiden Leitern entsteht ein Kurzschluss und die gemessene Spannung fällt plötzlich ab.
+\subsubsection{Bauweise B}
+Auch dieser Aufbau nutzt nebeneinander liegende Leiterbahnen, allerdings wird außerdem noch ein Transistor verwendet. Die unter Spannung liegende Leiterbahn ist diesmal mit dem Emitter-Anschluss des Transistors verbunden, der an Erde liegende Leiter mit dem Base-Anschluss und der Signalausgang mit dem Collector. Wenn nun eine Verbindung zwischen den Leiterbahnen entsteht wird der Transistor durchlässig und die Eingangsspannung kann gemessen werden.
+
+\chapter{Anschluss des Arduinos}
+
+\end{document}

@@ -29,17 +29,18 @@
 // Measurement interval in milliseconds 
 #define MEASUREMENT_INTERVAL 30000
 // pH limits
-#define PH_MAX 6.7
-#define PH_MIN 6.0
+#define PH_MAX 14
+#define PH_MIN 1
 // PPM limits
-#define PPM_MIN 800
-#define PPM_MAX 1100
+#define PPM_MIN 0
+#define PPM_MAX 100100
 
 // Constants for EC and pH measurements
 #define V_REF 5.0
 #define VOLTAGE_RESOLUTION 1024.0
 #define PPM_CONST 700.0
 #define R1 1000
+#define K 1.85
 #define PH_FACTOR 3.5
 #define PH_OFFSET 0.15
 
@@ -47,7 +48,7 @@
 #define MAX_ADJUSTMENT_LOOPS 10
 #define PH_PUMP_AMOUNT 6000 // Pump run time in milliseconds
 #define PPM_PUMP_AMOUNT 6000 // Pump run time in milliseconds
-#define SENSOR_WAIT 30000 // Wait time in milliseconds
+#define SENSOR_WAIT 10000 // Wait time in milliseconds
 
 // Light control hours
 #define LIGHTS_ON_HOUR 7
@@ -91,6 +92,7 @@ float valid_values[NUMBER_SENSORS][2] = {
   {0, 14}, //ph 
   {0, 3000} //ec
 }; 
+
 float measured_values[NUMBER_SENSORS] = {};
 int validated[NUMBER_SENSORS] = {};
 
@@ -107,13 +109,14 @@ void setup() {
   
   // Begin real-time clock, set start time
   RTC.begin();
-  RTCTime startTime(1, Month::JANUARY, 2023, 0, 0, 0, DayOfWeek::MONDAY, SaveLight::SAVING_TIME_INACTIVE);
+  RTCTime startTime(1, Month::JANUARY, 2023, 22, 12, 0, DayOfWeek::MONDAY, SaveLight::SAVING_TIME_INACTIVE);
   RTC.setTime(startTime);
   
   // Initialize sensors and display
   sensors.begin();
   am2302.begin();
   display.begin();
+  display.display();
   
   // Initialize input pins
   initialize_input_pin(PIN_WATER_LVL_1);
@@ -131,17 +134,19 @@ void setup() {
   initialize_pin(PIN_EC_POWER);
 
   delay(2000); // Wait for sensors to stabilize
-  
-  Serial.print("Sensors initialized. Beginning loop. Current settings: measurements taken every ");
-  Serial.print(MEASUREMENT_INTERVAL / 1000);
-  Serial.println(" Seconds");
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.print("Sensors initialized. Beginning loop. Current settings: measurements taken every ");
+  display.print(MEASUREMENT_INTERVAL / 1000);
+  display.println(" Seconds");
   
   display.display(); // Display initial message
+  delay(10000);
 }
 
 void loop() {
   error_found = 0;
-  Serial.print("Measurement starting.");
+  Serial.println("Measurement starting.");
   
   // Use real-time clock to control PIN_LIGHTS, get current time
   RTCTime currentTime;
@@ -160,7 +165,7 @@ void loop() {
   // Measure pH value
   ph = get_PH();
   // set ph_ok flag to 0 if ph is too low (high ph is handled by adjustment functions)
-  if(ph < 6.0){
+  if(ph < 1){
     ph_ok = 0;
   }
   else{
@@ -196,28 +201,40 @@ void loop() {
   }
   // Check if pH needs adjustment
   if (ph > PH_MAX) {
+    
     adjust_PH();
+    
+    return;
   }
   
   // Check if PPM needs adjustment
   if (ppm < PPM_MIN) {
+    
     adjust_PPM();
+    
+    return;
   }
 
   // Update the display with current sensor values
   update_display();
   }
+
+  Serial.println(ph);
+  Serial.println(ppm);
+  Serial.println(temp_water);
+  Serial.println(temp_air);
+  Serial.println(ph_ok);
+  
   delay(MEASUREMENT_INTERVAL); // Wait for the next measurement cycle
 }
 
 void update_display() {
   // Clear the display
   display.clearDisplay();
-  
-  // Set text size and color
-  display.setTextSize(0);
-  display.setCursor(0, 0);
   display.setTextColor(SSD1306_WHITE);
+  // Set text size and color
+  display.setTextSize(1);
+  display.setCursor(0, 0);
   
   // Print sensor values on the display
   display.print("Water temp: ");
@@ -226,21 +243,26 @@ void update_display() {
   display.println(temp_air);
   display.print("PH-Value: ");
   display.println(ph);
-  display.print("Humidity: ");
-  display.println(hum_air);
+  display.print("PPM: ");
+  display.println(ppm);
   if(ph_ok == 0 || ppm_ok == 0){
     display.clearDisplay();
-  }
-  if(ph_ok == 0){
-    display.println("PH not in recommended range, adjustment needed.");
-  }
-  if(ppm_ok == 0){
-    display.println("PPM not in recommended range, adjustment needed.");
-  }  display.display(); // Update the display with new data
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.setTextColor(SSD1306_WHITE);
+    if(ph_ok == 0){
+      display.println("PH not in recommended range.");
+      display.println(ph);
+    }
+    if(ppm_ok == 0){
+        display.println("PPM not in recommended range.");
+        display.println(ppm);
+    }
+}  
+  display.display(); // Update the display with new data
 }
 
 float get_PPM() {
-  float K = 2.0; // Calibration constant for EC measurement
   digitalWrite(PIN_EC_POWER, HIGH); // Power the EC meter
   delay(10); // Wait for stable reading
   
@@ -283,9 +305,11 @@ void adjust_PH() {
   // Adjust pH until it's within the desired range or max loops reached
   while (get_PH() > PH_MIN && number_loops < MAX_ADJUSTMENT_LOOPS) {
     // Turn on pH-down pump for 6 seconds
-    digitalWrite(PIN_PUMP_NUTRIENTS, HIGH);
+    Serial.println("adjusting ph");
+    Serial.println(ph);
+    digitalWrite(PIN_PUMP_PH_DOWN, HIGH);
     delay(PH_PUMP_AMOUNT);
-    digitalWrite(PIN_PUMP_NUTRIENTS, LOW);
+    digitalWrite(PIN_PUMP_PH_DOWN, LOW);
     
     // Wait 30 seconds for pH to adjust
     delay(SENSOR_WAIT);
@@ -297,14 +321,17 @@ void adjust_PPM() {
   int number_loops = 0; // Initialize loop counter
   
   // Adjust PPM until it's within the desired range or max loops reached
-  while (get_PPM() < PPM_MAX && number_loops < MAX_ADJUSTMENT_LOOPS) {
+  while (ppm < PPM_MAX && number_loops < MAX_ADJUSTMENT_LOOPS) {
     // Turn on nutrient pump for 6 seconds
-    digitalWrite(PIN_PUMP_PH_DOWN, HIGH);
+    Serial.println("Adjusting ppm");
+    Serial.println(ppm);
+    digitalWrite(PIN_PUMP_NUTRIENTS, HIGH);
     delay(PPM_PUMP_AMOUNT);
-    digitalWrite(PIN_PUMP_PH_DOWN, LOW);
+    digitalWrite(PIN_PUMP_NUTRIENTS, LOW);
     
     // Wait 30 seconds for nutrients to mix
     delay(SENSOR_WAIT);
+    ppm = get_PPM();
     number_loops++;
   }
 }
