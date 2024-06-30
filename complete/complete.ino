@@ -164,13 +164,6 @@ void loop() {
   measured_values[1] = temp_water;
   // Measure pH value
   ph = get_PH();
-  // set ph_ok flag to 0 if ph is too low (high ph is handled by adjustment functions)
-  if(ph < 1){
-    ph_ok = 0;
-  }
-  else{
-    ph_ok = 1;
-  }
   measured_values[2] = ph;
   // Measure air temperature and humidity
   temp_air = am2302.get_Temperature();
@@ -198,6 +191,13 @@ void loop() {
   }
   else{
     ppm_ok = 1;
+  }
+  // set ph_ok flag to 0 if ph is too low (high ph is handled by adjustment functions)
+  if(ph < 1){
+    ph_ok = 0;
+  }
+  else{
+    ph_ok = 1;
   }
   // Check if pH needs adjustment
   if (ph > PH_MAX) {
