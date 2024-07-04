@@ -43,7 +43,7 @@
 #define K 1.85
 #define PH_FACTOR 3.5
 #define PH_OFFSET 0.15
-
+#define PPM_CYCLES 6
 // Adjustment parameters
 #define MAX_ADJUSTMENT_LOOPS 10
 #define PH_PUMP_AMOUNT 6000 // Pump run time in milliseconds
@@ -74,6 +74,8 @@ float temp_water = 0.0;
 float temp_air = 0.0;
 float hum_air = 0.0;
 float ppm = 0.0;
+float ppm_temp = 0.0;
+float ppm_counter = 0.0;
 
 // Function declarations
 float get_PPM();
@@ -170,7 +172,17 @@ void loop() {
   hum_air = am2302.get_Humidity();
   measured_values[0] = temp_air;
   // Measure EC and PPM
-  ppm = get_PPM();
+
+  if(ppm_counter >= PPM_CYCLES){
+    ppm = ppm_temp/PPM_CYCLES;
+    ppm_counter = 0;
+    ppm_temp = 0;
+  }
+  else{
+    ppm_temp+= get_PPM();
+    ppm_counter++;
+  }
+  
   measured_values[3] = ppm;
   
   //validate measured values
