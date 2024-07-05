@@ -1,6 +1,6 @@
 // Include all necessary libraries
 
-// TODO: calibrate K value for EC-meter, error handling
+// TODO: consider temperature in ppm
 #include <RTC.h> // Real Time Clock library
 #include <DallasTemperature.h> // Library for water temperature sensor
 #include <OneWire.h> // Library for one-wire communication
@@ -8,6 +8,7 @@
 #include <Wire.h> // Library for I2C communication
 #include <Adafruit_SSD1306.h> // Library for OLED display
 #include <Adafruit_GFX.h> // Graphics library for OLED display
+#include <BH1750.h> //Brightness sensor
 
 #define NUMBER_SENSORS 5
 // Define pins
@@ -21,6 +22,9 @@
 #define PIN_EC_POWER 7
 #define PIN_AIR_TEMP 6
 #define PIN_WATER_TEMP 2
+#define ROTARY_A 9
+#define ROTARY_B 10
+#define ROTARY_SWITCH 11
 // Pump pins
 #define PIN_PUMP_WATER 3
 #define PIN_PUMP_NUTRIENTS 4
@@ -28,13 +32,10 @@
 
 // Measurement interval in milliseconds 
 #define MEASUREMENT_INTERVAL 30000
-// pH limits
-#define PH_MAX 14
-#define PH_MIN 1
-// PPM limits
-#define PPM_MIN 0
-#define PPM_MAX 100100
 
+// Light levels
+#define LIGHT_MIN 200
+#define LIGHT_MAX 30000
 // Constants for EC and pH measurements
 #define V_REF 5.0
 #define VOLTAGE_RESOLUTION 1024.0
@@ -51,8 +52,8 @@
 #define SENSOR_WAIT 10000 // Wait time in milliseconds
 
 // Light control hours
-#define LIGHTS_ON_HOUR 7
-#define LIGHTS_OFF_HOUR 21
+#define PUMP_ON_HOUR 7
+#define PUMP_OFF_HOUR 21
 
 // Air temperature and humidity sensor
 AM2302::AM2302_Sensor am2302(PIN_AIR_TEMP);
@@ -64,29 +65,51 @@ DallasTemperature sensors(&oneWire);
 // OLED display
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
 
+// Brightness sensor
+BH1750 lightMeter;
+
+// Variables limits
+float desired_ppm = 0.0;
+float desire_ph = 0.0;
+
 // Declare variables for sensor readings
 int water_level = 0;
+int pump_state = 0;
 int light_state = 0;
 int ph_ok = 0; 
 int ppm_ok = 0;
+
+float ph_max = 0.0;
+float ph_min = 0.0;
+float ppm_max = 0.0;
+float ppm_min = 0.0;
+
 float ph = 0.0;
+int ph_counter = 0;
 float temp_water = 0.0;
 float temp_air = 0.0;
 float hum_air = 0.0;
 float ppm = 0.0;
+
 float ppm_temp = 0.0;
-float ppm_counter = 0.0;
+int ppm_counter = 0;
+
+float light_level = 0.0;
 
 // Function declarations
 float get_PPM();
 float get_PH();
+float get_light_level();
+void set_values();
 void validate(float measured_values[]);
 void adjust_PH();
 void adjust_PPM();
 void initialize_pin(int pin);
 void initialize_input_pin(int pin);
 void update_display();
-void control_lights(int currentHour);
+void control_pump(int currentHour);
+void control_light(float light_level);
+
 //validation of measured values
 float valid_values[NUMBER_SENSORS][2] = {
   {0, 40},//air temperature
@@ -108,7 +131,8 @@ const char *sensor_names[] = {
 int error_found = 0;
 void setup() {
   Serial.begin(9600); // Initialize serial communication
-  
+  Wire.begin();
+
   // Begin real-time clock, set start time
   RTC.begin();
   RTCTime startTime(1, Month::JANUARY, 2023, 22, 12, 0, DayOfWeek::MONDAY, SaveLight::SAVING_TIME_INACTIVE);
@@ -119,7 +143,8 @@ void setup() {
   am2302.begin();
   display.begin();
   display.display();
-  
+  lightMeter.begin();
+
   // Initialize input pins
   initialize_input_pin(PIN_WATER_LVL_1);
   initialize_input_pin(PIN_WATER_LVL_2);
@@ -127,7 +152,9 @@ void setup() {
   initialize_input_pin(PIN_EC_READ);
   initialize_input_pin(PIN_AIR_TEMP);
   initialize_input_pin(PIN_WATER_TEMP);
-  
+  initialize_input_pin(ROTARY_A);
+  initialize_input_pin(ROTARY_B);
+  initialize_input_pin(ROTARY_SWITCH);
   // Initialize output pins
   initialize_pin(PIN_PUMP_WATER);
   initialize_pin(PIN_PUMP_NUTRIENTS);
@@ -143,6 +170,15 @@ void setup() {
   display.println(" Seconds");
   
   display.display(); // Display initial message
+
+  set_values();
+
+  ph_min = ph_counter * 0.1 - 0.25;
+  ph_max = ph_counter * 0.1 + 0.25;
+
+  ppm_min = ph_counter * 100 - 200;
+  ppm_max = ph_counter * 100 + 200;
+
   delay(10000);
 }
 
@@ -157,22 +193,28 @@ void loop() {
   // Get current hour
   int currentHour = currentTime.getHour();
   
-  // Control lights based on current hour
-  control_lights(currentHour);
+  // Control pump based on current hour
+  control_pump(currentHour);
   
+  // Measure light level to control lights, and control lights
+  light_level = lightMeter.readLightLevel();
+  control_lights(light_level);
+
   // Measure water temperature
   sensors.requestTemperatures();
   temp_water = sensors.getTempCByIndex(0);
   measured_values[1] = temp_water;
+
   // Measure pH value
   ph = get_PH();
   measured_values[2] = ph;
+
   // Measure air temperature and humidity
   temp_air = am2302.get_Temperature();
   hum_air = am2302.get_Humidity();
   measured_values[0] = temp_air;
-  // Measure EC and PPM
 
+  // Measure EC and PPM
   if(ppm_counter >= PPM_CYCLES){
     ppm = ppm_temp/PPM_CYCLES;
     ppm_counter = 0;
@@ -212,7 +254,7 @@ void loop() {
     ph_ok = 1;
   }
   // Check if pH needs adjustment
-  if (ph > PH_MAX) {
+  if (ph > ph_max) {
     
     adjust_PH();
     
@@ -220,7 +262,7 @@ void loop() {
   }
   
   // Check if PPM needs adjustment
-  if (ppm < PPM_MIN) {
+  if (ppm < ppm_min) {
     
     adjust_PPM();
     
@@ -315,7 +357,7 @@ void adjust_PH() {
   int number_loops = 0; // Initialize loop counter
   
   // Adjust pH until it's within the desired range or max loops reached
-  while (get_PH() > PH_MIN && number_loops < MAX_ADJUSTMENT_LOOPS) {
+  while (get_PH() > ph_min && number_loops < MAX_ADJUSTMENT_LOOPS) {
     // Turn on pH-down pump for 6 seconds
     Serial.println("adjusting ph");
     Serial.println(ph);
@@ -333,7 +375,7 @@ void adjust_PPM() {
   int number_loops = 0; // Initialize loop counter
   
   // Adjust PPM until it's within the desired range or max loops reached
-  while (ppm < PPM_MAX && number_loops < MAX_ADJUSTMENT_LOOPS) {
+  while (ppm < ppm_max && number_loops < MAX_ADJUSTMENT_LOOPS) {
     // Turn on nutrient pump for 6 seconds
     Serial.println("Adjusting ppm");
     Serial.println(ppm);
@@ -347,17 +389,26 @@ void adjust_PPM() {
     number_loops++;
   }
 }
-
-void control_lights(int currentHour) {
-  // Turn off lights if current hour is outside the range
-  if ((currentHour < LIGHTS_ON_HOUR || currentHour > LIGHTS_OFF_HOUR) && light_state == 1) {
-    digitalWrite(PIN_LIGHTS, LOW);
+void control_lights(float light_level) {
+  if(light_level < LIGHT_MIN && light_state == 0){
+    light_state = 1;
+    digitalWrite(PIN_LIGHTS, HIGH);
+  }
+  else if(light_level > LIGHT_MAX && light_state == 1){
     light_state = 0;
+    digitalWrite(PIN_LIGHTS, LOW);
+  }
+}
+void control_pump(int currentHour) {
+  // Turn off lights if current hour is outside the range
+  if ((currentHour < PUMP_ON_HOUR || currentHour > PUMP_OFF_HOUR) && pump_state == 1) {
+    digitalWrite(PIN_PUMP_WATER, LOW);
+    pump_state = 0;
   } 
   // Turn on lights if current hour is within the range
-  else if ((currentHour >= LIGHTS_ON_HOUR && currentHour <= LIGHTS_OFF_HOUR) && light_state == 0) {
-    digitalWrite(PIN_LIGHTS, HIGH);
-    light_state = 1;
+  else if ((currentHour >= PUMP_ON_HOUR && currentHour <= PUMP_OFF_HOUR) && pump_state == 0) {
+    digitalWrite(PIN_PUMP_WATER, HIGH);
+    pump_state = 1;
   }
 }
 
@@ -376,6 +427,67 @@ void validate(float measured_values[]){
       validated[i] = 1;
     }
   }
-  
 }
 
+void update_display_setup_ph(int counter){
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.println("Set PH");
+  display.println(counter * 0.1);
+  display.display();
+}
+
+void update_display_setup_PPM(int counter){
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.println("Set PPM");
+  display.println(counter * 50);
+  display.display();
+}
+
+void set_values(){
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.println("Desired PH?");
+  display.display();
+  int ph_counter = 0;
+  int lastState = 0;
+  int currentState = 0;
+  
+  lastState = digitalRead(ROTARY_A);
+
+  while(digitalRead(ROTARY_SWITCH) == HIGH){
+      currentState = digitalRead(ROTARY_A);  // Read the current state of CLK
+  if (currentState != lastState  && currentState == 1) {
+    if (digitalRead(ROTARY_B) != currentState) {
+      ph_counter --;
+      update_display_setup_ph(ph_counter);
+    } else {
+      ph_counter ++;
+      update_display_setup_ph(ph_counter);
+    }
+  }
+  }
+
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.println("Desired PPM?");
+  display.display();
+
+  while(digitalRead(ROTARY_SWITCH) == HIGH){
+      currentState = digitalRead(ROTARY_A);  // Read the current state of CLK
+  if (currentState != lastState  && currentState == 1) {
+    if (digitalRead(ROTARY_B) != currentState) {
+      ppm_counter --;
+      update_display_setup_ph(ppm_counter);
+    } else {
+      ppm_counter ++;
+      update_display_setup_ph(ppm_counter);
+    }
+  }
+  }
+}
