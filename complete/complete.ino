@@ -32,7 +32,12 @@
 
 // Measurement interval in milliseconds 
 #define MEASUREMENT_INTERVAL 30000
-
+// Ranges for PH and PPM
+#define PH_RANGE 0.5
+#define PPM_RANGE 150
+// Resolutions for rotation thingies
+#define PH_RESOLUTION  0.1
+#define PPM_RESOLUTION  50
 // Light levels
 #define LIGHT_MIN 200
 #define LIGHT_MAX 30000
@@ -78,23 +83,23 @@ int pump_state = 0;
 int light_state = 0;
 int ph_ok = 0; 
 int ppm_ok = 0;
-
+// Declare variable limits for ph and ppm, chose through the rotary knobs
 float ph_max = 0.0;
 float ph_min = 0.0;
 float ppm_max = 0.0;
 float ppm_min = 0.0;
-
+// Declare variables for measurement
 float ph = 0.0;
-int ph_counter = 0;
 float temp_water = 0.0;
 float temp_air = 0.0;
 float hum_air = 0.0;
 float ppm = 0.0;
-
 float ppm_temp = 0.0;
 int ppm_counter = 0;
-
 float light_level = 0.0;
+// Variables to determine the entered values
+int ph_set_counter = 0;
+int ppm_set_counter = 0;
 
 // Function declarations
 float get_PPM();
@@ -110,6 +115,9 @@ void update_display();
 void control_pump(int currentHour);
 void control_light(float light_level);
 
+void update_display_setup_ph(int counter);
+void update_display_setup_PPM(int counter);
+void set_values();
 //validation of measured values
 float valid_values[NUMBER_SENSORS][2] = {
   {0, 40},//air temperature
@@ -173,11 +181,11 @@ void setup() {
 
   set_values();
 
-  ph_min = ph_counter * 0.1 - 0.25;
-  ph_max = ph_counter * 0.1 + 0.25;
+  ph_min = ph_set_counter * PH_RESOLUTION - PH_RANGE;
+  ph_max = ph_set_counter * PH_RESOLUTION + PH_RANGE;
 
-  ppm_min = ph_counter * 100 - 200;
-  ppm_max = ph_counter * 100 + 200;
+  ppm_min = ppm_set_counter * PPM_RESOLUTION - PPM_RANGE;
+  ppm_max = ppm_set_counter * PPM_RESOLUTION + PPM_RANGE;
 
   delay(10000);
 }
@@ -434,7 +442,7 @@ void update_display_setup_ph(int counter){
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0,0);
   display.println("Set PH");
-  display.println(counter * 0.1);
+  display.println(counter * PH_RESOLUTION);
   display.display();
 }
 
@@ -443,33 +451,34 @@ void update_display_setup_PPM(int counter){
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0,0);
   display.println("Set PPM");
-  display.println(counter * 50);
+  display.println(counter * PPM_RESOLUTION);
   display.display();
 }
 
 void set_values(){
+  //Display initial message
   display.clearDisplay();
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0,0);
   display.println("Desired PH?");
   display.display();
-  int ph_counter = 0;
+  //declare needed variables
   int lastState = 0;
   int currentState = 0;
-  
+  //save the t 0 state to laststate
   lastState = digitalRead(ROTARY_A);
-
+  //while the button is not pressed, look for rotation
   while(digitalRead(ROTARY_SWITCH) == HIGH){
-      currentState = digitalRead(ROTARY_A);  // Read the current state of CLK
-  if (currentState != lastState  && currentState == 1) {
-    if (digitalRead(ROTARY_B) != currentState) {
-      ph_counter --;
-      update_display_setup_ph(ph_counter);
-    } else {
-      ph_counter ++;
-      update_display_setup_ph(ph_counter);
+    currentState = digitalRead(ROTARY_A);  // Read the current state of CLK
+    if (currentState != lastState  && currentState == 1) { // if the new state is different from the state before, and = 1(high)
+      if (digitalRead(ROTARY_B) != currentState) { //check the other signal, if its 0 turn clockwise
+        ph_set_counter --;
+        update_display_setup_ph(ph_set_counter);
+      } else {                                     //otherwise turn counterclockwise
+        ph_set_counter ++;
+        update_display_setup_ph(ph_set_counter);
+      }
     }
-  }
   }
 
   display.clearDisplay();
@@ -477,17 +486,28 @@ void set_values(){
   display.setCursor(0,0);
   display.println("Desired PPM?");
   display.display();
+  
+  lastState = digitalRead(ROTARY_A); //repeat the same thing as above
 
   while(digitalRead(ROTARY_SWITCH) == HIGH){
-      currentState = digitalRead(ROTARY_A);  // Read the current state of CLK
-  if (currentState != lastState  && currentState == 1) {
-    if (digitalRead(ROTARY_B) != currentState) {
-      ppm_counter --;
-      update_display_setup_ph(ppm_counter);
-    } else {
-      ppm_counter ++;
-      update_display_setup_ph(ppm_counter);
+    currentState = digitalRead(ROTARY_A);  // Read the current state of CLK
+    if (currentState != lastState  && currentState == 1) {
+      if (digitalRead(ROTARY_B) != currentState) {
+        ppm_set_counter --;
+        update_display_setup_ph(ppm_set_counter);
+      } else {
+        ppm_set_counter ++;
+        update_display_setup_ph(ppm_set_counter);
+      }
     }
   }
-  }
+  display.clearDisplay();
+  display.setTextColor(SSD1306_WHITE);
+  display.setCursor(0,0);
+  display.println("Settings succesfully chosen.");
+  display.print("PH: ");
+  display.println(ph_set_counter * PH_RESOLUTION);
+  display.print("PPM: ");
+  display.println(ppm_set_counter * PPM_RESOLUTION);
+  display.display();
 }
