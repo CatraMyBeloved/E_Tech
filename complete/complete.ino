@@ -47,7 +47,7 @@
 #define PPM_CONST 700.0
 #define R1 1000
 #define K 1.85
-#define PH_FACTOR 3.5
+#define PH_FACTOR 3.5 // conversion factor mV PH
 #define PH_OFFSET 0.15
 #define PPM_CYCLES 6
 // Adjustment parameters
@@ -338,7 +338,7 @@ float get_PPM() {
   float R_Water = (R1 * V_Water) / (V_REF - V_Water);
   
   // Calculate electrical conductivity in milliSiemens
-  float EC = 1000 / R_Water * K;
+  float EC = R1 / R_Water * K;
   
   // Convert EC to PPM
   float PPM = EC * PPM_CONST;
