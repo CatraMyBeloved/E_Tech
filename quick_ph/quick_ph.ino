@@ -8,5 +8,6 @@ void setup() {
 }
 
 void loop() {
-  Serial.println(analogRead(PIN_PH)* (5/1024)*3.5 +0.15);  
+  Serial.println(analogRead(PIN_PH)* (5/1024)*3.5 +0.15); 
+  delay(2); 
 }
