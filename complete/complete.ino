@@ -1,6 +1,7 @@
 // Include all necessary libraries
 
 // TODO: consider temperature in ppm
+
 #include <RTC.h> // Real Time Clock library
 #include <DallasTemperature.h> // Library for water temperature sensor
 #include <OneWire.h> // Library for one-wire communication
@@ -231,6 +232,7 @@ void loop() {
   else{
     ppm_temp+= get_PPM();
     ppm_counter++;
+    delay(5);
   }
   
   measured_values[3] = ppm;
